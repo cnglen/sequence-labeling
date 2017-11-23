@@ -3,10 +3,23 @@ import helper
 import numpy as np
 import tensorflow as tf
 
+import logging
+logging.basicConfig(filename='bilstm_crf_model.log',
+                    level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 
 class BILSTM_CRF(object):
 
-    def __init__(self, num_chars, num_classes, num_steps=200, num_epochs=100, embedding_matrix=None, is_training=True, is_crf=True, weight=False):
+    def __init__(self,
+                 num_chars,
+                 num_classes,
+                 num_steps=200,
+                 num_epochs=100,
+                 embedding_matrix=None,
+                 is_training=True,
+                 is_crf=True,
+                 weight=False):
         # Parameter
         self.max_f1 = 0
         self.learning_rate = 0.002
@@ -21,20 +34,32 @@ class BILSTM_CRF(object):
         self.num_classes = num_classes
 
         # placeholder of x, y and weight
+        # inputs:  ? x num_steps, 字符序列, id
+        # targets: ? x num_steps, 标记序列, id
+        # targets_weigth: ? x num_steps
+        # targets_transition:?
         self.inputs = tf.placeholder(tf.int32, [None, self.num_steps])
         self.targets = tf.placeholder(tf.int32, [None, self.num_steps])
         self.targets_weight = tf.placeholder(tf.float32, [None, self.num_steps])
         self.targets_transition = tf.placeholder(tf.int32, [None])
+        logging.debug("inputs: {}".format(self.inputs.shape))
+        logging.debug("targets: {}".format(self.targets.shape))
 
         # char embedding
+        # embedding: num_chars x emb_dim
         if embedding_matrix != None:
             self.embedding = tf.Variable(embedding_matrix, trainable=False, name="emb", dtype=tf.float32)
         else:
             self.embedding = tf.get_variable("emb", [self.num_chars, self.emb_dim])
+        logging.debug("embedding: {}".format(self.embedding.shape))
         self.inputs_emb = tf.nn.embedding_lookup(self.embedding, self.inputs)
+        logging.debug("inputs_emb: {} (after look up)".format(self.inputs_emb.shape))
         self.inputs_emb = tf.transpose(self.inputs_emb, [1, 0, 2])
+        logging.debug("inputs_emb: {} (after transpose)".format(self.inputs_emb.shape))
         self.inputs_emb = tf.reshape(self.inputs_emb, [-1, self.emb_dim])
-        self.inputs_emb = tf.split(axis=0, num_or_size_splits=self.num_steps, value=self.inputs_emb)
+        logging.debug("inputs_emb: {} (after reshape)".format(self.inputs_emb.shape))
+        self.inputs_emb = tf.split(value=self.inputs_emb, num_or_size_splits=self.num_steps, axis=0)
+        logging.debug("inputs_emb: {} (after split)".format(self.inputs_emb.shape))
 
         # lstm cell
         lstm_cell_fw = tf.nn.rnn_cell.BasicLSTMCell(self.hidden_dim)
